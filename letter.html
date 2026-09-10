@@ -12,7 +12,7 @@
   *{box-sizing:border-box;}
   body{
     margin:0; min-height:100vh;
-    background:#eef1f6;
+    background:#f7f1e3;
     font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
     display:flex; flex-direction:column; align-items:center;
     padding:28px 14px 40px;
@@ -147,7 +147,15 @@
     document.getElementById('root').innerHTML = '<div class="state">' + esc(msg) + '</div>';
   }
 
-  var id = new URLSearchParams(location.search).get('id');
+  /* Vercel's /l/:id rewrite is server-side only — the browser still sees
+     the original /l/<id> path, not the rewritten ?id= query string, so
+     read the id from the path first and fall back to the query string
+     (for direct /letter.html?id=... access). */
+  var id = (function(){
+    var m = location.pathname.match(/\/l\/([^\/?#]+)/);
+    if (m) return decodeURIComponent(m[1]);
+    return new URLSearchParams(location.search).get('id');
+  })();
   if (!id){
     showState('편지 주소가 올바르지 않아요.');
   } else {
