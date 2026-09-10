@@ -237,7 +237,7 @@
 
   .paper-scroll{ overflow:hidden; padding:4px; }
   .paper{
-    width:420px; max-width:100%; margin:0 auto; color:#1a2230;
+    width:480px; max-width:100%; margin:0 auto; color:#1a2230;
     font-family:'Noto Sans KR', sans-serif;
   }
   /* card-news carousel: one swipeable card per slide (cover, verse,
@@ -262,17 +262,12 @@
   .card-dots{ display:flex; align-items:center; gap:6px; }
   .card-dots .dot{ width:6px; height:6px; border-radius:50%; background:var(--line); flex:none; }
   .card-dots .dot.active{ background:var(--accent); width:16px; border-radius:3px; }
-  .paper .hero{
-    position:relative; border-radius:20px; overflow:hidden; min-height:270px;
-    display:flex; flex-direction:column; justify-content:flex-end; padding:22px 20px;
-    background:linear-gradient(150deg,#2f7dd1,#f2a238);
-  }
-  .paper .hero img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
-  .paper .hero .scrim{ position:absolute; inset:0; background:linear-gradient(0deg, rgba(10,16,26,.72) 0%, rgba(10,16,26,.15) 55%, rgba(10,16,26,.05) 100%); z-index:1; }
-  .paper .hero .hero-inner{ position:relative; z-index:2; }
+  .paper .hero{ border-radius:20px; overflow:hidden; display:flex; flex-direction:column; }
+  .paper .hero-photo{ position:relative; height:150px; flex:none; }
+  .paper .hero-photo img{ width:100%; height:100%; object-fit:cover; object-position:78% 72%; display:block; }
+  .paper .hero-textbox{ padding:20px 20px 22px; background:linear-gradient(150deg,#2f7dd1,#f2a238); }
   .paper .hero .hero-eyebrow{ font-size:11.5px; font-weight:700; letter-spacing:.08em; color:rgba(255,255,255,.85); text-transform:uppercase; margin-bottom:6px; }
-  .paper .hero .hero-title{ font-family:'Noto Serif KR', serif; font-size:29px; font-weight:700; color:#fff; line-height:1.28; text-shadow:0 2px 14px rgba(0,0,0,.35); }
-  .paper .hero .hero-sub{ font-size:13px; color:rgba(255,255,255,.88); margin-top:8px; font-weight:500; }
+  .paper .hero .hero-title{ font-family:'Noto Sans KR', sans-serif; font-size:26px; font-weight:800; color:#fff; line-height:1.3; }
 
   .paper .collage{ display:grid; grid-template-columns:1fr 1fr; gap:6px; border-radius:18px; overflow:hidden; }
   .paper .collage img{ width:100%; height:100%; aspect-ratio:1/1; object-fit:cover; display:block; background:#e4ecf7; }
@@ -289,8 +284,7 @@
   .paper .intro p:last-child{ margin-bottom:0; }
 
   .paper .section-card{ border-radius:20px; padding:22px 18px; text-align:center; }
-  .paper .section-card .badge{ display:inline-flex; align-items:center; justify-content:center; min-width:40px; padding:4px 12px; border-radius:999px; color:#fff; font-size:12px; font-weight:800; letter-spacing:.03em; margin-bottom:10px; }
-  .paper .section-card h4{ font-size:17px; font-weight:800; color:#182335; margin-bottom:14px; }
+  .paper .section-card .badge{ display:inline-block; max-width:100%; padding:8px 16px; border-radius:12px; color:#fff; font-size:15px; font-weight:800; letter-spacing:-.01em; line-height:1.35; margin-bottom:14px; }
   .paper .section-card .items{ text-align:left; }
   .paper .section-card .item{ display:flex; gap:10px; align-items:flex-start; padding:10px 2px; border-bottom:1px dashed rgba(20,30,50,.14); }
   .paper .section-card .item:last-child{ border-bottom:none; padding-bottom:2px; }
@@ -1372,20 +1366,26 @@
      (cover, verse, opening words, one per prayer item) instead of one
      long scrolling sheet — each entry is the complete inner HTML for
      one card. */
+  /* Two cards total: page 1 is the cover (photo/title + verse + opening
+     words), page 2 is every prayer item stacked together (+ footer). */
   function buildSlides(letter){
     var photos = letter.photos || [];
-    var slides = [];
+    var coverParts = [];
+    var itemsParts = [];
 
-    var heroInner =
-      '<div class="hero-inner">' +
-        (letter.subtitle ? '<div class="hero-eyebrow">' + esc(letter.subtitle) + '</div>' : '') +
-        '<div class="hero-title">' + esc(letter.title || '제목을 입력해주세요') + '</div>' +
-      '</div>';
     var heroImgSrc = photos.length ? photos[0].dataUrl : DEFAULT_HERO_IMG;
-    slides.push('<div class="hero"><img src="' + heroImgSrc + '" alt="배경 사진"><div class="scrim"></div>' + heroInner + '</div>');
+    coverParts.push(
+      '<div class="hero">' +
+        '<div class="hero-photo"><img src="' + heroImgSrc + '" alt="배경 사진"></div>' +
+        '<div class="hero-textbox">' +
+          (letter.subtitle ? '<div class="hero-eyebrow">' + esc(letter.subtitle) + '</div>' : '') +
+          '<div class="hero-title">' + esc(letter.title || '제목을 입력해주세요') + '</div>' +
+        '</div>' +
+      '</div>'
+    );
 
     if (letter.verseText){
-      slides.push(
+      coverParts.push(
         '<div class="verse-card"><div class="icon">📖</div>' +
           (letter.verseRef ? '<div class="verse-ref">' + esc(letter.verseRef) + '</div>' : '') +
           '<div class="verse-text">&ldquo;' + esc(letter.verseText).replace(/\n/g,'<br>') + '&rdquo;</div>' +
@@ -1395,7 +1395,7 @@
 
     var introParas = (letter.intro||'').split(/\n\s*\n/).map(function(p){ return p.trim(); }).filter(Boolean)
       .map(function(p){ return '<p>' + esc(p).replace(/\n/g,'<br>') + '</p>'; }).join('');
-    if (introParas) slides.push('<div class="intro">' + introParas + '</div>');
+    if (introParas) coverParts.push('<div class="intro">' + introParas + '</div>');
 
     var sIdx = 0;
     letter.sections.forEach(function(s){
@@ -1415,10 +1415,9 @@
       var sCollageHtml = sPhotos.length
         ? '<div class="collage" style="margin-top:' + (lines.length ? '14px' : '2px') + '">' + sPhotos.map(function(p){ return '<img src="' + p.dataUrl + '" alt="사진">'; }).join('') + '</div>'
         : '';
-      slides.push(
+      itemsParts.push(
         '<div class="section-card" style="background:' + c.soft + '">' +
-          '<div class="badge" style="background:' + c.strong + '">ISSUE ' + (sIdx<10?'0':'') + sIdx + '</div>' +
-          (s.heading.trim() ? '<h4>' + esc(s.heading) + '</h4>' : '') +
+          (s.heading.trim() ? '<div class="badge" style="background:' + c.strong + '">' + esc(s.heading) + '</div>' : '') +
           (lines.length ? '<div class="items">' + itemsHtml + '</div>' : '') +
           sCollageHtml +
         '</div>'
@@ -1427,10 +1426,12 @@
 
     if (letter.footerText){
       var footerHtml = '<div class="footer">' + esc(letter.footerText) + '</div>';
-      if (slides.length) slides[slides.length - 1] += footerHtml;
-      else slides.push(footerHtml);
+      if (itemsParts.length) itemsParts.push(footerHtml);
+      else coverParts.push(footerHtml);
     }
 
+    var slides = [coverParts.join('')];
+    if (itemsParts.length) slides.push(itemsParts.join(''));
     return slides;
   }
 
