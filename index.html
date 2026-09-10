@@ -262,12 +262,15 @@
   .card-dots{ display:flex; align-items:center; gap:6px; }
   .card-dots .dot{ width:6px; height:6px; border-radius:50%; background:var(--line); flex:none; }
   .card-dots .dot.active{ background:var(--accent); width:16px; border-radius:3px; }
-  .paper .hero{ border-radius:20px; overflow:hidden; display:flex; flex-direction:column; }
-  .paper .hero-photo{ position:relative; height:290px; flex:none; }
-  .paper .hero-photo img{ width:100%; height:100%; object-fit:cover; object-position:75% 68%; display:block; }
-  .paper .hero-textbox{ padding:20px 20px 22px; background:linear-gradient(150deg,#2f7dd1,#f2a238); }
+  .paper .hero{
+    position:relative; border-radius:20px; overflow:hidden; height:230px;
+    display:flex; flex-direction:column; justify-content:flex-end; padding:18px 20px;
+  }
+  .paper .hero img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:68% 58%; z-index:0; }
+  .paper .hero .scrim{ position:absolute; inset:0; background:linear-gradient(0deg, rgba(10,16,26,.72) 0%, rgba(10,16,26,.15) 55%, rgba(10,16,26,.05) 100%); z-index:1; }
+  .paper .hero .hero-inner{ position:relative; z-index:2; }
   .paper .hero .hero-eyebrow{ font-size:11.5px; font-weight:700; letter-spacing:.08em; color:rgba(255,255,255,.85); text-transform:uppercase; margin-bottom:6px; }
-  .paper .hero .hero-title{ font-family:'Noto Sans KR', sans-serif; font-size:26px; font-weight:800; color:#fff; line-height:1.3; }
+  .paper .hero .hero-title{ font-family:'Noto Sans KR', sans-serif; font-size:26px; font-weight:800; color:#fff; line-height:1.3; text-shadow:0 2px 12px rgba(0,0,0,.4); }
 
   .paper .collage{ display:grid; grid-template-columns:1fr 1fr; gap:6px; border-radius:18px; overflow:hidden; }
   .paper .collage img{ width:100%; height:100%; aspect-ratio:1/1; object-fit:cover; display:block; background:#e4ecf7; }
@@ -1371,14 +1374,14 @@
   function buildSlides(letter){
     var photos = letter.photos || [];
     var coverParts = [];
-    var messageParts = [];
     var itemsParts = [];
 
     var heroImgSrc = photos.length ? photos[0].dataUrl : DEFAULT_HERO_IMG;
     coverParts.push(
       '<div class="hero">' +
-        '<div class="hero-photo"><img src="' + heroImgSrc + '" alt="배경 사진"></div>' +
-        '<div class="hero-textbox">' +
+        '<img src="' + heroImgSrc + '" alt="배경 사진">' +
+        '<div class="scrim"></div>' +
+        '<div class="hero-inner">' +
           (letter.subtitle ? '<div class="hero-eyebrow">' + esc(letter.subtitle) + '</div>' : '') +
           '<div class="hero-title">' + esc(letter.title || '제목을 입력해주세요') + '</div>' +
         '</div>' +
@@ -1386,7 +1389,7 @@
     );
 
     if (letter.verseText){
-      messageParts.push(
+      coverParts.push(
         '<div class="verse-card"><div class="icon">📖</div>' +
           (letter.verseRef ? '<div class="verse-ref">' + esc(letter.verseRef) + '</div>' : '') +
           '<div class="verse-text">&ldquo;' + esc(letter.verseText).replace(/\n/g,'<br>') + '&rdquo;</div>' +
@@ -1396,7 +1399,7 @@
 
     var introParas = (letter.intro||'').split(/\n\s*\n/).map(function(p){ return p.trim(); }).filter(Boolean)
       .map(function(p){ return '<p>' + esc(p).replace(/\n/g,'<br>') + '</p>'; }).join('');
-    if (introParas) messageParts.push('<div class="intro">' + introParas + '</div>');
+    if (introParas) coverParts.push('<div class="intro">' + introParas + '</div>');
 
     var sIdx = 0;
     letter.sections.forEach(function(s){
@@ -1428,14 +1431,12 @@
     if (letter.footerText){
       var footerHtml = '<div class="footer">' + esc(letter.footerText) + '</div>';
       if (itemsParts.length) itemsParts.push(footerHtml);
-      else if (messageParts.length) messageParts.push(footerHtml);
       else coverParts.push(footerHtml);
     }
 
-    /* Three logical pages — cover / verse+opening words / prayer items —
-       collapsing forward whenever a page would otherwise be empty (e.g.
-       no verse and no opening words means only two pages appear). */
-    var groups = [coverParts, messageParts, itemsParts].filter(function(g){ return g.length; });
+    /* Two pages: cover (photo/title + verse + opening words) and every
+       prayer item stacked together (+ footer). */
+    var groups = [coverParts, itemsParts].filter(function(g){ return g.length; });
     return groups.map(function(g){ return g.join(''); });
   }
 
