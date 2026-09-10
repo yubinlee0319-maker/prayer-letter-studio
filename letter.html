@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>기도편지</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=Noto+Serif+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="/hero-bg.js"></script>
+<style>
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh;
+    background:#eef1f6;
+    font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+    display:flex; flex-direction:column; align-items:center;
+    padding:28px 14px 40px;
+  }
+  .wrap{ width:100%; max-width:460px; }
+  .state{ text-align:center; color:#5f6b7a; padding:60px 20px; font-size:14px; }
+
+  .paper{
+    width:100%; background:#f4f7fd; color:#1a2230;
+    border-radius:26px; box-shadow:0 1px 2px rgba(28,39,51,.06), 0 8px 24px -12px rgba(28,39,51,.25);
+    padding:16px; display:flex; flex-direction:column; gap:16px;
+  }
+  .paper .hero{
+    position:relative; border-radius:20px; overflow:hidden; min-height:270px;
+    display:flex; flex-direction:column; justify-content:flex-end; padding:22px 20px;
+    background:linear-gradient(150deg,#2f7dd1,#f2a238);
+  }
+  .paper .hero img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
+  .paper .hero .scrim{ position:absolute; inset:0; background:linear-gradient(0deg, rgba(10,16,26,.72) 0%, rgba(10,16,26,.15) 55%, rgba(10,16,26,.05) 100%); z-index:1; }
+  .paper .hero .hero-inner{ position:relative; z-index:2; }
+  .paper .hero .hero-eyebrow{ font-size:11.5px; font-weight:700; letter-spacing:.08em; color:rgba(255,255,255,.85); text-transform:uppercase; margin-bottom:6px; }
+  .paper .hero .hero-title{ font-family:'Noto Serif KR', serif; font-size:29px; font-weight:700; color:#fff; line-height:1.28; text-shadow:0 2px 14px rgba(0,0,0,.35); }
+
+  .paper .collage{ display:grid; grid-template-columns:1fr 1fr; gap:6px; border-radius:18px; overflow:hidden; }
+  .paper .collage img{ width:100%; height:100%; aspect-ratio:1/1; object-fit:cover; display:block; background:#e4ecf7; }
+
+  .paper .verse-card{ background:#fdf1de; border-radius:20px; padding:24px 20px; text-align:center; }
+  .paper .verse-card .icon{ font-size:26px; margin-bottom:8px; }
+  .paper .verse-card .verse-ref{ display:inline-block; font-size:11.5px; font-weight:800; color:#b5651d; background:#ffffffb0; padding:4px 12px; border-radius:999px; margin-bottom:10px; }
+  .paper .verse-card .verse-text{ font-family:'Noto Serif KR', serif; font-style:italic; font-size:15px; color:#7a4a12; line-height:1.7; }
+
+  .paper .intro{ padding:2px 6px; }
+  .paper .intro p{ font-family:'Noto Serif KR', serif; font-size:14.5px; line-height:1.85; text-align:justify; color:#2a3446; margin:0 0 12px; }
+  .paper .intro p:last-child{ margin-bottom:0; }
+
+  .paper .section-card{ border-radius:20px; padding:22px 18px; text-align:center; }
+  .paper .section-card .badge{ display:inline-flex; align-items:center; justify-content:center; min-width:40px; padding:4px 12px; border-radius:999px; color:#fff; font-size:12px; font-weight:800; letter-spacing:.03em; margin-bottom:10px; }
+  .paper .section-card h4{ font-size:17px; font-weight:800; color:#182335; margin-bottom:14px; }
+  .paper .section-card .items{ text-align:left; }
+  .paper .section-card .item{ display:flex; gap:10px; align-items:flex-start; padding:10px 2px; border-bottom:1px dashed rgba(20,30,50,.14); }
+  .paper .section-card .item:last-child{ border-bottom:none; padding-bottom:2px; }
+  .paper .section-card .item:first-child{ padding-top:0; }
+  .paper .section-card .num{ flex:none; width:22px; height:22px; border-radius:50%; color:#fff; font-size:11.5px; font-weight:800; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  .paper .section-card .item span.txt{ font-size:13.5px; line-height:1.65; color:#28324a; text-align:left; }
+
+  .paper .footer{ text-align:center; font-weight:700; font-size:12.5px; color:#7c8aa0; padding:4px 6px 2px; }
+
+  .made-with{ text-align:center; margin-top:22px; font-size:12px; color:#8a93a0; }
+  .made-with a{ color:#3573a5; text-decoration:none; font-weight:600; }
+  .made-with a:hover{ text-decoration:underline; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="root"><div class="state">불러오는 중…</div></div>
+    <div class="made-with" id="madeWith" hidden>이 기도편지는 <a href="/">기도편지 공방</a>으로 만들었어요</div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  function esc(s){
+    return (s==null?'':String(s)).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  var CARD_PALETTE = [
+    { strong:'#ce9e27', soft:'#faf3e1' },
+    { strong:'#96a630', soft:'#f1f5db' },
+    { strong:'#5e9438', soft:'#e4f1da' }
+  ];
+
+  function paperInnerHTML(letter){
+    var photos = letter.photos || [];
+
+    var heroInner =
+      '<div class="hero-inner">' +
+        (letter.subtitle ? '<div class="hero-eyebrow">' + esc(letter.subtitle) + '</div>' : '') +
+        '<div class="hero-title">' + esc(letter.title || '') + '</div>' +
+      '</div>';
+    var heroImgSrc = photos.length ? photos[0].dataUrl : (window.DEFAULT_HERO_IMG || '');
+    var heroHtml = '<div class="hero">' + (heroImgSrc ? '<img src="' + heroImgSrc + '" alt="배경 사진">' : '') + '<div class="scrim"></div>' + heroInner + '</div>';
+
+    var verseHtml = letter.verseText ? (
+      '<div class="verse-card"><div class="icon">📖</div>' +
+        (letter.verseRef ? '<div class="verse-ref">' + esc(letter.verseRef) + '</div>' : '') +
+        '<div class="verse-text">&ldquo;' + esc(letter.verseText).replace(/\n/g,'<br>') + '&rdquo;</div>' +
+      '</div>'
+    ) : '';
+
+    var introParas = (letter.intro||'').split(/\n\s*\n/).map(function(p){ return p.trim(); }).filter(Boolean)
+      .map(function(p){ return '<p>' + esc(p).replace(/\n/g,'<br>') + '</p>'; }).join('');
+    var introHtml = introParas ? '<div class="intro">' + introParas + '</div>' : '';
+
+    var sIdx = 0;
+    var sectionsHtml = (letter.sections || []).map(function(s){
+      var lines = (s.body||'').split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+      var sPhotos = s.photos || [];
+      if (!(s.heading||'').trim() && !lines.length && !sPhotos.length) return '';
+      var c = CARD_PALETTE[sIdx % CARD_PALETTE.length];
+      sIdx++;
+      var itemsHtml = lines.map(function(l, i){
+        return (
+          '<div class="item">' +
+            '<span class="num" style="background:' + c.strong + '">' + (i+1) + '</span>' +
+            '<span class="txt">' + esc(l) + '</span>' +
+          '</div>'
+        );
+      }).join('');
+      var sCollageHtml = sPhotos.length
+        ? '<div class="collage" style="margin-top:' + (lines.length ? '14px' : '2px') + '">' + sPhotos.map(function(p){ return '<img src="' + p.dataUrl + '" alt="사진">'; }).join('') + '</div>'
+        : '';
+      return (
+        '<div class="section-card" style="background:' + c.soft + '">' +
+          '<div class="badge" style="background:' + c.strong + '">ISSUE ' + (sIdx<10?'0':'') + sIdx + '</div>' +
+          ((s.heading||'').trim() ? '<h4>' + esc(s.heading) + '</h4>' : '') +
+          (lines.length ? '<div class="items">' + itemsHtml + '</div>' : '') +
+          sCollageHtml +
+        '</div>'
+      );
+    }).join('');
+
+    return (
+      heroHtml + verseHtml + introHtml + sectionsHtml +
+      (letter.footerText ? '<div class="footer">' + esc(letter.footerText) + '</div>' : '')
+    );
+  }
+
+  function showState(msg){
+    document.getElementById('root').innerHTML = '<div class="state">' + esc(msg) + '</div>';
+  }
+
+  var id = new URLSearchParams(location.search).get('id');
+  if (!id){
+    showState('편지 주소가 올바르지 않아요.');
+  } else {
+    fetch('/api/letter?id=' + encodeURIComponent(id))
+      .then(function(r){
+        if (!r.ok) throw new Error(r.status === 404 ? 'notfound' : 'error');
+        return r.json();
+      })
+      .then(function(data){
+        var letter = data && data.letter;
+        if (!letter){ showState('편지를 찾을 수 없어요.'); return; }
+        document.title = (letter.title || '기도편지') + (letter.subtitle ? ' · ' + letter.subtitle : '');
+        var paper = document.createElement('div');
+        paper.className = 'paper';
+        paper.innerHTML = paperInnerHTML(letter);
+        var root = document.getElementById('root');
+        root.innerHTML = '';
+        root.appendChild(paper);
+        document.getElementById('madeWith').hidden = false;
+      })
+      .catch(function(e){
+        showState(e && e.message === 'notfound' ? '편지를 찾을 수 없어요. 링크를 다시 확인해주세요.' : '편지를 불러오지 못했어요.');
+      });
+  }
+})();
+</script>
+</body>
+</html>
