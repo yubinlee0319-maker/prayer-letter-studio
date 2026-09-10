@@ -383,6 +383,7 @@
   /* ---------------- storage ---------------- */
   var LKEY = 'pl_letters_v1';
   var RKEY = 'pl_recipients_v1';
+  var OWNER_KEY = 'pl_owner_v1';
 
   function uid(){
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -432,11 +433,37 @@
       body: JSON.stringify({ letters: state.letters, recipients: state.recipients })
     }).then(function(r){
       if (r.status === 401){ sessionExpired(); return; }
-      BACKEND_AVAILABLE = !!(r && r.ok);
+      /* A non-2xx here is a transient server hiccup, not "no backend" or
+         "logged out" — leave BACKEND_AVAILABLE/LOGGED_IN_EMAIL alone so
+         the status line doesn't wrongly claim local-only mode. The next
+         edit's debounced save just tries again. */
+      if (r.ok) BACKEND_AVAILABLE = true;
       renderSaveStatus();
     }).catch(function(){
       renderSaveStatus();
     });
+  }
+
+  /* Guards against a shared-device leak: the browser's local cache
+     (fast-paint fallback / offline copy) only ever belongs to ONE
+     account at a time. If the account now signing in differs from
+     whoever the cache last belonged to, wipe it back to a fresh
+     starter letter BEFORE any server sync — otherwise an empty new
+     account would get "seeded" with the previous person's content. */
+  function adoptAccount(email){
+    var savedOwner = null;
+    try { savedOwner = localStorage.getItem(OWNER_KEY); } catch(e){}
+    if (savedOwner === email) return;
+    state.letters = [seedLetter()];
+    state.recipients = [];
+    state.currentId = state.letters[0].id;
+    state.tab = 'compose';
+    state.archiveDetailId = null;
+    try {
+      localStorage.setItem(OWNER_KEY, email);
+      localStorage.setItem(LKEY, JSON.stringify(state.letters));
+      localStorage.setItem(RKEY, JSON.stringify(state.recipients));
+    } catch(e){}
   }
 
   function sessionExpired(){
@@ -487,6 +514,7 @@
       if (!data) return;
       BACKEND_AVAILABLE = true;
       LOGGED_IN_EMAIL = data.email;
+      adoptAccount(data.email);
       hideAuthGate();
       renderSaveStatus();
       fetchServerState();
@@ -569,6 +597,7 @@
         }
         LOGGED_IN_EMAIL = res.data.email;
         BACKEND_AVAILABLE = true;
+        adoptAccount(res.data.email);
         hideAuthGate();
         renderSaveStatus();
         fetchServerState();
@@ -589,7 +618,7 @@
       state.currentId = state.letters[0].id;
       state.tab = 'compose';
       state.archiveDetailId = null;
-      try { localStorage.removeItem(LKEY); localStorage.removeItem(RKEY); } catch(e){}
+      try { localStorage.removeItem(LKEY); localStorage.removeItem(RKEY); localStorage.removeItem(OWNER_KEY); } catch(e){}
       render();
       showAuthGate('login');
     });
@@ -898,18 +927,25 @@
       toast('공유 링크는 서버 저장이 켜져 있을 때만 만들 수 있어요 (이 화면에서는 지원하지 않아요).');
       return;
     }
+    if (!LOGGED_IN_EMAIL){
+      toast('로그인 후 다시 시도해주세요.');
+      showAuthGate('login');
+      return;
+    }
     toast('공유 링크를 준비하고 있어요…');
     fetch('/api/sync', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ letters: state.letters, recipients: state.recipients })
     }).then(function(r){
-      BACKEND_AVAILABLE = !!(r && r.ok);
+      if (r.status === 401){ sessionExpired(); throw new Error('logged_out'); }
+      if (r.ok) BACKEND_AVAILABLE = true;
       renderSaveStatus();
-      if (!r.ok) throw new Error('sync failed');
+      if (!r.ok) throw new Error('sync_failed');
       copyUrl();
-    }).catch(function(){
-      BACKEND_AVAILABLE = false;
+    }).catch(function(e){
+      if (e && e.message === 'logged_out') return;
       renderSaveStatus();
       toast('서버에 연결할 수 없어 링크를 만들 수 없어요.');
     });
