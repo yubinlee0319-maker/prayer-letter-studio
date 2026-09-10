@@ -162,12 +162,12 @@
     margin-bottom:6px;
   }
   .field .sub{ font-weight:500; color:var(--ink-faint); }
-  .field input[type=text], .field textarea, .field select{
+  .field input[type=text], .field input[type=email], .field input[type=password], .field textarea, .field select{
     width:100%; border:1px solid var(--line); background:var(--surface-2);
     color:var(--ink); border-radius:9px; padding:9px 11px; font-size:14px;
     line-height:1.55; resize:vertical;
   }
-  .field input[type=text]:focus, .field textarea:focus, .field select:focus{
+  .field input[type=text]:focus, .field input[type=email]:focus, .field input[type=password]:focus, .field textarea:focus, .field select:focus{
     border-color:var(--accent); outline:none;
   }
   .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -331,6 +331,38 @@
   .footer-note{ text-align:center; font-size:12px; color:var(--ink-faint); padding:24px 0 10px; }
   .footer-note a{ color:var(--accent); cursor:pointer; text-decoration:underline; }
 
+  .user-email{ color:var(--ink-dim); font-weight:600; }
+  .logout-link{
+    border:none; background:transparent; color:var(--ink-faint); font-size:12px;
+    text-decoration:underline; cursor:pointer; padding:0; font-weight:600;
+  }
+  .logout-link:hover{ color:var(--ink); }
+
+  /* ---------- auth gate ---------- */
+  .auth-overlay{
+    position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
+    background: rgba(20,20,18,.35);
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(3px); padding:20px;
+  }
+  .auth-card{
+    width:100%; max-width:360px; background:var(--surface); border:1px solid var(--line);
+    border-radius:16px; box-shadow:var(--shadow); padding:28px 26px; text-align:center;
+  }
+  .auth-card h2{ font-size:19px; font-weight:800; margin-bottom:4px; }
+  .auth-sub{ font-size:13px; color:var(--ink-dim); margin-bottom:18px; }
+  .auth-tabs{ display:flex; gap:4px; background:var(--surface-2); border-radius:9px; padding:3px; margin-bottom:18px; }
+  .auth-tabs button{
+    flex:1; border:none; background:transparent; padding:8px; border-radius:7px;
+    font-size:13px; font-weight:700; color:var(--ink-dim); cursor:pointer;
+  }
+  .auth-tabs button.active{ background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .auth-card .field{ text-align:left; }
+  .auth-error{
+    margin-top:12px; font-size:12.5px; color:var(--danger); background:var(--verse-soft);
+    border-radius:8px; padding:8px 10px;
+  }
+
   @media (prefers-reduced-motion: reduce){
     *{ transition:none !important; animation:none !important; }
   }
@@ -365,10 +397,14 @@
     } catch(e){ return fallback; }
   }
   var saveTimer = null, saveOk = true;
-  /* BACKEND_AVAILABLE: null = not checked yet, true = /api/sync (Turso)
-     is reachable, false = unreachable (e.g. running as a Claude Artifact
-     or a plain local file) — falls back to localStorage-only, silently. */
+  /* BACKEND_AVAILABLE: null = not checked yet, true = a Turso backend
+     exists (login may still be required), false = unreachable (e.g.
+     running as a Claude Artifact or a plain local file) — falls back to
+     localStorage-only, silently. */
   var BACKEND_AVAILABLE = null;
+  /* Signed-in account's email, or null when not logged in (or when
+     there is no backend at all, in which case login never applies). */
+  var LOGGED_IN_EMAIL = null;
 
   function persist(){
     try {
@@ -388,28 +424,36 @@
   }
 
   function syncToServer(){
-    if (BACKEND_AVAILABLE === false) return;
+    if (BACKEND_AVAILABLE === false || !LOGGED_IN_EMAIL) return;
     fetch('/api/sync', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ letters: state.letters, recipients: state.recipients })
     }).then(function(r){
+      if (r.status === 401){ sessionExpired(); return; }
       BACKEND_AVAILABLE = !!(r && r.ok);
       renderSaveStatus();
     }).catch(function(){
-      BACKEND_AVAILABLE = false;
       renderSaveStatus();
     });
   }
 
-  function initBackendSync(){
-    fetch('/api/sync').then(function(r){
-      if (!r.ok) throw new Error('no backend');
+  function sessionExpired(){
+    LOGGED_IN_EMAIL = null;
+    renderSaveStatus();
+    showAuthGate('login', '세션이 만료됐어요. 다시 로그인해주세요.');
+  }
+
+  function fetchServerState(){
+    fetch('/api/sync', { credentials: 'same-origin' }).then(function(r){
+      if (r.status === 401){ sessionExpired(); return null; }
+      if (!r.ok) throw new Error('sync fetch failed');
       return r.json();
     }).then(function(data){
-      BACKEND_AVAILABLE = true;
-      var serverLetters = (data && Array.isArray(data.letters)) ? data.letters : [];
-      var serverRecipients = (data && Array.isArray(data.recipients)) ? data.recipients : [];
+      if (!data) return;
+      var serverLetters = Array.isArray(data.letters) ? data.letters : [];
+      var serverRecipients = Array.isArray(data.recipients) ? data.recipients : [];
       if (serverLetters.length || serverRecipients.length){
         if (serverLetters.length) state.letters = serverLetters;
         state.recipients = serverRecipients;
@@ -420,13 +464,134 @@
         } catch(e){}
         render();
       } else {
-        /* fresh/empty database: seed it with what we have locally */
+        /* brand-new account: seed it with the starter letter */
         syncToServer();
       }
       renderSaveStatus();
     }).catch(function(){
+      renderSaveStatus();
+    });
+  }
+
+  function checkAuthAndBoot(){
+    fetch('/api/auth?action=me', { credentials: 'same-origin' }).then(function(r){
+      if (r.status === 401){
+        BACKEND_AVAILABLE = true;
+        renderSaveStatus();
+        showAuthGate('login');
+        return null;
+      }
+      if (!r.ok) throw new Error('no backend');
+      return r.json();
+    }).then(function(data){
+      if (!data) return;
+      BACKEND_AVAILABLE = true;
+      LOGGED_IN_EMAIL = data.email;
+      hideAuthGate();
+      renderSaveStatus();
+      fetchServerState();
+    }).catch(function(){
+      /* No backend reachable at all (Claude Artifact, a plain local
+         file, network hiccup): stay in localStorage-only mode. */
       BACKEND_AVAILABLE = false;
       renderSaveStatus();
+    });
+  }
+
+  /* ---------------- auth gate ---------------- */
+  var authMode = 'login';
+
+  function authGateHTML(message){
+    var isLogin = authMode === 'login';
+    return (
+      '<div class="auth-card">' +
+        '<div class="brand-mark" style="width:44px;height:44px;font-size:20px;margin:0 auto 14px;">✉️</div>' +
+        '<h2>기도편지 공방</h2>' +
+        '<p class="auth-sub">로그인하고 나만의 기도편지를 써보세요.</p>' +
+        '<div class="auth-tabs">' +
+          '<button type="button" class="' + (isLogin?'active':'') + '" data-mode="login">로그인</button>' +
+          '<button type="button" class="' + (!isLogin?'active':'') + '" data-mode="signup">회원가입</button>' +
+        '</div>' +
+        '<form id="authForm">' +
+          '<div class="field"><label>이메일</label><input type="email" id="authEmail" autocomplete="username" required></div>' +
+          '<div class="field"><label>비밀번호</label><input type="password" id="authPassword" autocomplete="' + (isLogin?'current-password':'new-password') + '" minlength="6" required></div>' +
+          '<button type="submit" class="btn primary" id="authSubmit" style="width:100%; justify-content:center;">' + (isLogin?'로그인':'회원가입') + '</button>' +
+        '</form>' +
+        '<div class="auth-error" id="authError"' + (message?'':' hidden') + '>' + esc(message||'') + '</div>' +
+      '</div>'
+    );
+  }
+
+  function showAuthGate(mode, message){
+    authMode = mode || 'login';
+    var el = document.getElementById('authGate');
+    if (!el){
+      el = document.createElement('div');
+      el.id = 'authGate';
+      el.className = 'auth-overlay';
+      document.body.appendChild(el);
+    }
+    el.hidden = false;
+    el.innerHTML = authGateHTML(message);
+    bindAuthGateEvents();
+  }
+  function hideAuthGate(){
+    var el = document.getElementById('authGate');
+    if (el) el.remove();
+  }
+  function bindAuthGateEvents(){
+    var el = document.getElementById('authGate');
+    if (!el) return;
+    el.querySelectorAll('.auth-tabs button').forEach(function(btn){
+      btn.addEventListener('click', function(){ showAuthGate(btn.dataset.mode); });
+    });
+    var form = document.getElementById('authForm');
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var email = document.getElementById('authEmail').value.trim();
+      var password = document.getElementById('authPassword').value;
+      var submitBtn = document.getElementById('authSubmit');
+      submitBtn.disabled = true;
+      fetch('/api/auth?action=' + authMode, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, password: password })
+      }).then(function(r){
+        return r.json().then(function(data){ return { ok: r.ok, data: data }; });
+      }).then(function(res){
+        if (!res.ok){
+          submitBtn.disabled = false;
+          var errEl = document.getElementById('authError');
+          errEl.textContent = (res.data && res.data.error) || '문제가 발생했어요. 다시 시도해주세요.';
+          errEl.hidden = false;
+          return;
+        }
+        LOGGED_IN_EMAIL = res.data.email;
+        BACKEND_AVAILABLE = true;
+        hideAuthGate();
+        renderSaveStatus();
+        fetchServerState();
+      }).catch(function(){
+        submitBtn.disabled = false;
+        var errEl = document.getElementById('authError');
+        errEl.textContent = '서버에 연결할 수 없어요.';
+        errEl.hidden = false;
+      });
+    });
+  }
+
+  function logout(){
+    fetch('/api/auth?action=logout', { method: 'POST', credentials: 'same-origin' }).catch(function(){}).then(function(){
+      LOGGED_IN_EMAIL = null;
+      state.letters = [seedLetter()];
+      state.recipients = [];
+      state.currentId = state.letters[0].id;
+      state.tab = 'compose';
+      state.archiveDetailId = null;
+      try { localStorage.removeItem(LKEY); localStorage.removeItem(RKEY); } catch(e){}
+      render();
+      showAuthGate('login');
     });
   }
 
@@ -884,6 +1049,7 @@
     exportImage: exportImage,
     exportPDF: exportPDF,
     exportBackup: exportBackup,
+    logout: logout,
     deleteRecipient: deleteRecipient,
     openArchiveDetail: function(id){ state.archiveDetailId = id; render(); },
     backToArchive: function(){ state.archiveDetailId = null; render(); }
@@ -922,13 +1088,20 @@
   function renderSaveStatus(){
     var el = document.getElementById('saveStatus');
     if (!el) return;
+    var statusHtml;
     if (!saveOk){
-      el.innerHTML = '<span class="save-dot" style="background:var(--danger)"></span> 저장 실패 — 공간을 확인해주세요';
+      statusHtml = '<span class="save-dot" style="background:var(--danger)"></span> 저장 실패 — 공간을 확인해주세요';
+    } else if (BACKEND_AVAILABLE === true && LOGGED_IN_EMAIL){
+      statusHtml = '<span class="save-dot"></span> 서버에 저장됨 · 다른 기기에서도 이어서 볼 수 있어요';
     } else if (BACKEND_AVAILABLE === true){
-      el.innerHTML = '<span class="save-dot"></span> 서버에 저장됨 · 다른 기기에서도 이어서 볼 수 있어요';
+      statusHtml = '<span class="save-dot" style="background:var(--ink-faint)"></span> 로그인이 필요해요';
     } else {
-      el.innerHTML = '<span class="save-dot"></span> 이 브라우저에 자동 저장됨';
+      statusHtml = '<span class="save-dot"></span> 이 브라우저에 자동 저장됨';
     }
+    var userHtml = LOGGED_IN_EMAIL
+      ? ' <span class="user-email">' + esc(LOGGED_IN_EMAIL) + '</span><button type="button" class="logout-link" onclick="App.logout()">로그아웃</button>'
+      : '';
+    el.innerHTML = statusHtml + userHtml;
   }
 
   /* ---------- compose ---------- */
@@ -1330,7 +1503,7 @@
 
   /* ---------------- go ---------------- */
   render();
-  initBackendSync();
+  checkAuthAndBoot();
 })();
 </script>
 
