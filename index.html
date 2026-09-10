@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=Noto+Serif+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root{
     --bg:#f8f6f1;
@@ -234,13 +235,33 @@
   }
   .status-pill.ready{ background:var(--good-soft); color:var(--good); }
 
-  .paper-scroll{ overflow-x:auto; padding:4px; }
+  .paper-scroll{ overflow:hidden; padding:4px; }
   .paper{
-    width:420px; max-width:100%; margin:0 auto; background:#f4f7fd; color:#1a2230;
-    border-radius:26px; box-shadow: var(--shadow);
-    padding:16px; font-family:'Noto Sans KR', sans-serif;
-    display:flex; flex-direction:column; gap:16px;
+    width:420px; max-width:100%; margin:0 auto; color:#1a2230;
+    font-family:'Noto Sans KR', sans-serif;
   }
+  /* card-news carousel: one swipeable card per slide (cover, verse,
+     intro, each prayer item), instead of one long scrolling image */
+  .card-track{
+    display:flex; overflow-x:auto; scroll-snap-type:x mandatory;
+    scrollbar-width:none; -ms-overflow-style:none; border-radius:26px;
+  }
+  .card-track::-webkit-scrollbar{ display:none; }
+  .card-slide{
+    flex:0 0 100%; scroll-snap-align:start; box-sizing:border-box;
+    background:#f4f7fd; border-radius:26px; box-shadow: var(--shadow);
+    padding:16px; display:flex; flex-direction:column; gap:16px;
+  }
+  .card-nav{ display:flex; align-items:center; justify-content:center; gap:10px; margin-top:12px; }
+  .card-arrow{
+    width:30px; height:30px; border-radius:50%; border:1px solid var(--line); background:var(--surface);
+    color:var(--ink-dim); font-size:16px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; flex:none;
+  }
+  .card-arrow:hover:not(:disabled){ background:var(--surface-2); color:var(--ink); }
+  .card-arrow:disabled{ opacity:.35; cursor:default; }
+  .card-dots{ display:flex; align-items:center; gap:6px; }
+  .card-dots .dot{ width:6px; height:6px; border-radius:50%; background:var(--line); flex:none; }
+  .card-dots .dot.active{ background:var(--accent); width:16px; border-radius:3px; }
   .paper .hero{
     position:relative; border-radius:20px; overflow:hidden; min-height:270px;
     display:flex; flex-direction:column; justify-content:flex-end; padding:22px 20px;
@@ -978,44 +999,70 @@
     setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
   }
 
+  function cardSlideElements(){
+    return Array.prototype.slice.call(document.querySelectorAll('#paperNode .card-slide'));
+  }
+
   async function exportImage(){
-    var node = document.getElementById('paperNode');
-    if (!node || typeof html2canvas === 'undefined'){ toast('이미지 변환 라이브러리를 불러오지 못했어요.'); return; }
-    toast('이미지를 만들고 있어요…');
+    var slides = cardSlideElements();
+    if (!slides.length || typeof html2canvas === 'undefined'){ toast('이미지 변환 라이브러리를 불러오지 못했어요.'); return; }
+    toast('카드 이미지를 만들고 있어요…');
     try {
-      var canvas = await html2canvas(node, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-      canvas.toBlob(async function(blob){
-        if (!blob){ toast('이미지 생성에 실패했어요.'); return; }
-        try {
-          await saveFile('기도편지_' + dateStamp() + '.png', blob);
-          toast('이미지를 저장했어요. 카카오톡으로 보내보세요!');
-        } catch(e){
-          if (e && e.code === 'declined') return;
-          toast('저장에 실패했어요: ' + ((e && e.message) || e));
-        }
-      }, 'image/png');
+      if (slides.length === 1){
+        var canvas = await html2canvas(slides[0], { scale: 2, backgroundColor: '#f4f7fd', useCORS: true });
+        canvas.toBlob(async function(blob){
+          if (!blob){ toast('이미지 생성에 실패했어요.'); return; }
+          try {
+            await saveFile('기도편지_' + dateStamp() + '.png', blob);
+            toast('이미지를 저장했어요. 카카오톡으로 보내보세요!');
+          } catch(e){
+            if (e && e.code === 'declined') return;
+            toast('저장에 실패했어요: ' + ((e && e.message) || e));
+          }
+        }, 'image/png');
+        return;
+      }
+      if (typeof JSZip === 'undefined'){ toast('압축 라이브러리를 불러오지 못했어요.'); return; }
+      var zip = new JSZip();
+      for (var i = 0; i < slides.length; i++){
+        var c = await html2canvas(slides[i], { scale: 2, backgroundColor: '#f4f7fd', useCORS: true });
+        var blob = await new Promise(function(resolve){ c.toBlob(resolve, 'image/png'); });
+        zip.file(String(i + 1).padStart(2, '0') + '.png', blob);
+      }
+      var zipBlob = await zip.generateAsync({ type: 'blob' });
+      try {
+        await saveFile('기도편지_카드뉴스_' + dateStamp() + '.zip', zipBlob);
+        toast('카드 ' + slides.length + '장을 zip으로 저장했어요. 압축을 풀어 카카오톡에 한 번에 첨부해보세요!');
+      } catch(e){
+        if (e && e.code === 'declined') return;
+        toast('저장에 실패했어요: ' + ((e && e.message) || e));
+      }
     } catch(e){
       toast('이미지 생성 중 문제가 발생했어요.');
     }
   }
 
   async function exportPDF(){
-    var node = document.getElementById('paperNode');
-    if (!node || typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){ toast('PDF 변환 라이브러리를 불러오지 못했어요.'); return; }
+    var slides = cardSlideElements();
+    if (!slides.length || typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){ toast('PDF 변환 라이브러리를 불러오지 못했어요.'); return; }
     toast('PDF를 만들고 있어요…');
     try {
-      var canvas = await html2canvas(node, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-      var imgData = canvas.toDataURL('image/jpeg', 0.93);
-      var pdf = new window.jspdf.jsPDF({
-        orientation: canvas.height >= canvas.width ? 'portrait' : 'landscape',
-        unit: 'px',
-        format: [canvas.width, canvas.height]
-      });
-      pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+      var pdf = null;
+      for (var i = 0; i < slides.length; i++){
+        var canvas = await html2canvas(slides[i], { scale: 2, backgroundColor: '#f4f7fd', useCORS: true });
+        var imgData = canvas.toDataURL('image/jpeg', 0.93);
+        var orientation = canvas.height >= canvas.width ? 'portrait' : 'landscape';
+        if (!pdf){
+          pdf = new window.jspdf.jsPDF({ orientation: orientation, unit: 'px', format: [canvas.width, canvas.height] });
+        } else {
+          pdf.addPage([canvas.width, canvas.height], orientation);
+        }
+        pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+      }
       var blob = pdf.output('blob');
       try {
         await saveFile('기도편지_' + dateStamp() + '.pdf', blob);
-        toast('PDF를 저장했어요.');
+        toast('PDF를 저장했어요 (카드 ' + slides.length + '장, 페이지별로).');
       } catch(e){
         if (e && e.code === 'declined') return;
         toast('저장에 실패했어요: ' + ((e && e.message) || e));
@@ -1321,38 +1368,40 @@
     { strong:'#5e9438', soft:'#e4f1da' }
   ];
 
-  function renderPreview(){
-    var letter = currentLetter();
-    var node = document.getElementById('paperNode');
-    if (!node) return;
-
+  /* Builds the letter as an array of independent card-news slides
+     (cover, verse, opening words, one per prayer item) instead of one
+     long scrolling sheet — each entry is the complete inner HTML for
+     one card. */
+  function buildSlides(letter){
     var photos = letter.photos || [];
+    var slides = [];
 
-    /* hero: first uploaded photo as full-bleed cover, or the default prayer-hands backdrop */
     var heroInner =
       '<div class="hero-inner">' +
         (letter.subtitle ? '<div class="hero-eyebrow">' + esc(letter.subtitle) + '</div>' : '') +
         '<div class="hero-title">' + esc(letter.title || '제목을 입력해주세요') + '</div>' +
       '</div>';
     var heroImgSrc = photos.length ? photos[0].dataUrl : DEFAULT_HERO_IMG;
-    var heroHtml = '<div class="hero"><img src="' + heroImgSrc + '" alt="배경 사진"><div class="scrim"></div>' + heroInner + '</div>';
+    slides.push('<div class="hero"><img src="' + heroImgSrc + '" alt="배경 사진"><div class="scrim"></div>' + heroInner + '</div>');
 
-    var verseHtml = letter.verseText ? (
-      '<div class="verse-card"><div class="icon">📖</div>' +
-        (letter.verseRef ? '<div class="verse-ref">' + esc(letter.verseRef) + '</div>' : '') +
-        '<div class="verse-text">&ldquo;' + esc(letter.verseText).replace(/\n/g,'<br>') + '&rdquo;</div>' +
-      '</div>'
-    ) : '';
+    if (letter.verseText){
+      slides.push(
+        '<div class="verse-card"><div class="icon">📖</div>' +
+          (letter.verseRef ? '<div class="verse-ref">' + esc(letter.verseRef) + '</div>' : '') +
+          '<div class="verse-text">&ldquo;' + esc(letter.verseText).replace(/\n/g,'<br>') + '&rdquo;</div>' +
+        '</div>'
+      );
+    }
 
     var introParas = (letter.intro||'').split(/\n\s*\n/).map(function(p){ return p.trim(); }).filter(Boolean)
       .map(function(p){ return '<p>' + esc(p).replace(/\n/g,'<br>') + '</p>'; }).join('');
-    var introHtml = introParas ? '<div class="intro">' + introParas + '</div>' : '';
+    if (introParas) slides.push('<div class="intro">' + introParas + '</div>');
 
     var sIdx = 0;
-    var sectionsHtml = letter.sections.map(function(s){
+    letter.sections.forEach(function(s){
       var lines = (s.body||'').split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
       var sPhotos = s.photos || [];
-      if (!s.heading.trim() && !lines.length && !sPhotos.length) return '';
+      if (!s.heading.trim() && !lines.length && !sPhotos.length) return;
       var c = CARD_PALETTE[sIdx % CARD_PALETTE.length];
       sIdx++;
       var itemsHtml = lines.map(function(l, i){
@@ -1366,7 +1415,7 @@
       var sCollageHtml = sPhotos.length
         ? '<div class="collage" style="margin-top:' + (lines.length ? '14px' : '2px') + '">' + sPhotos.map(function(p){ return '<img src="' + p.dataUrl + '" alt="사진">'; }).join('') + '</div>'
         : '';
-      return (
+      slides.push(
         '<div class="section-card" style="background:' + c.soft + '">' +
           '<div class="badge" style="background:' + c.strong + '">ISSUE ' + (sIdx<10?'0':'') + sIdx + '</div>' +
           (s.heading.trim() ? '<h4>' + esc(s.heading) + '</h4>' : '') +
@@ -1374,14 +1423,71 @@
           sCollageHtml +
         '</div>'
       );
-    }).join('');
+    });
 
-    node.innerHTML =
-      heroHtml +
-      verseHtml +
-      introHtml +
-      sectionsHtml +
-      (letter.footerText ? '<div class="footer">' + esc(letter.footerText) + '</div>' : '');
+    if (letter.footerText){
+      var footerHtml = '<div class="footer">' + esc(letter.footerText) + '</div>';
+      if (slides.length) slides[slides.length - 1] += footerHtml;
+      else slides.push(footerHtml);
+    }
+
+    return slides;
+  }
+
+  function cardNavHTML(count){
+    var dots = '';
+    for (var i = 0; i < count; i++) dots += '<span class="dot' + (i===0?' active':'') + '"></span>';
+    return (
+      '<div class="card-nav">' +
+        '<button type="button" class="card-arrow" id="cardPrev" aria-label="이전 카드" disabled>‹</button>' +
+        '<div class="card-dots" id="cardDots">' + dots + '</div>' +
+        '<button type="button" class="card-arrow" id="cardNext" aria-label="다음 카드">›</button>' +
+      '</div>'
+    );
+  }
+
+  function bindCardNav(){
+    var track = document.getElementById('cardTrack');
+    if (!track) return;
+    var count = track.children.length;
+    var prev = document.getElementById('cardPrev');
+    var next = document.getElementById('cardNext');
+    var dots = Array.prototype.slice.call(document.querySelectorAll('#cardDots .dot'));
+
+    function currentIndex(){
+      return track.clientWidth ? Math.round(track.scrollLeft / track.clientWidth) : 0;
+    }
+    function update(){
+      var idx = currentIndex();
+      dots.forEach(function(d, i){ d.classList.toggle('active', i === idx); });
+      if (prev) prev.disabled = idx <= 0;
+      if (next) next.disabled = idx >= count - 1;
+    }
+    function goTo(idx){
+      idx = Math.max(0, Math.min(count - 1, idx));
+      track.scrollTo({ left: idx * track.clientWidth, behavior: 'smooth' });
+    }
+    if (prev) prev.addEventListener('click', function(){ goTo(currentIndex() - 1); });
+    if (next) next.addEventListener('click', function(){ goTo(currentIndex() + 1); });
+    var scrollTimer = null;
+    track.addEventListener('scroll', function(){
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(update, 80);
+    });
+    update();
+  }
+
+  function renderPreview(){
+    var letter = currentLetter();
+    var node = document.getElementById('paperNode');
+    if (!node) return;
+
+    var slides = buildSlides(letter);
+    var trackHtml = '<div class="card-track" id="cardTrack">' +
+      slides.map(function(s){ return '<div class="card-slide">' + s + '</div>'; }).join('') +
+      '</div>';
+    node.innerHTML = trackHtml + (slides.length > 1 ? cardNavHTML(slides.length) : '');
+    bindCardNav();
   }
 
   /* ---------- recipients ---------- */
