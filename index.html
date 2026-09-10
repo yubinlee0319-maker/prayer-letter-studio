@@ -349,6 +349,11 @@
     } catch(e){ return fallback; }
   }
   var saveTimer = null, saveOk = true;
+  /* BACKEND_AVAILABLE: null = not checked yet, true = /api/sync (Turso)
+     is reachable, false = unreachable (e.g. running as a Claude Artifact
+     or a plain local file) — falls back to localStorage-only, silently. */
+  var BACKEND_AVAILABLE = null;
+
   function persist(){
     try {
       localStorage.setItem(LKEY, JSON.stringify(state.letters));
@@ -358,11 +363,55 @@
       saveOk = false;
       toast('저장 공간이 부족해요. 오래된 편지나 사진을 정리해주세요.');
     }
+    syncToServer();
     renderSaveStatus();
   }
   function scheduleSave(){
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(persist, 350);
+  }
+
+  function syncToServer(){
+    if (BACKEND_AVAILABLE === false) return;
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ letters: state.letters, recipients: state.recipients })
+    }).then(function(r){
+      BACKEND_AVAILABLE = !!(r && r.ok);
+      renderSaveStatus();
+    }).catch(function(){
+      BACKEND_AVAILABLE = false;
+      renderSaveStatus();
+    });
+  }
+
+  function initBackendSync(){
+    fetch('/api/sync').then(function(r){
+      if (!r.ok) throw new Error('no backend');
+      return r.json();
+    }).then(function(data){
+      BACKEND_AVAILABLE = true;
+      var serverLetters = (data && Array.isArray(data.letters)) ? data.letters : [];
+      var serverRecipients = (data && Array.isArray(data.recipients)) ? data.recipients : [];
+      if (serverLetters.length || serverRecipients.length){
+        if (serverLetters.length) state.letters = serverLetters;
+        state.recipients = serverRecipients;
+        if (!getLetter(state.currentId)) state.currentId = sortedLetters()[0].id;
+        try {
+          localStorage.setItem(LKEY, JSON.stringify(state.letters));
+          localStorage.setItem(RKEY, JSON.stringify(state.recipients));
+        } catch(e){}
+        render();
+      } else {
+        /* fresh/empty database: seed it with what we have locally */
+        syncToServer();
+      }
+      renderSaveStatus();
+    }).catch(function(){
+      BACKEND_AVAILABLE = false;
+      renderSaveStatus();
+    });
   }
 
   /* ---------------- default content ---------------- */
@@ -817,9 +866,13 @@
   function renderSaveStatus(){
     var el = document.getElementById('saveStatus');
     if (!el) return;
-    el.innerHTML = saveOk
-      ? '<span class="save-dot"></span> 이 브라우저에 자동 저장됨'
-      : '<span class="save-dot" style="background:var(--danger)"></span> 저장 실패 — 공간을 확인해주세요';
+    if (!saveOk){
+      el.innerHTML = '<span class="save-dot" style="background:var(--danger)"></span> 저장 실패 — 공간을 확인해주세요';
+    } else if (BACKEND_AVAILABLE === true){
+      el.innerHTML = '<span class="save-dot"></span> 서버에 저장됨 · 다른 기기에서도 이어서 볼 수 있어요';
+    } else {
+      el.innerHTML = '<span class="save-dot"></span> 이 브라우저에 자동 저장됨';
+    }
   }
 
   /* ---------- compose ---------- */
@@ -1220,6 +1273,7 @@
 
   /* ---------------- go ---------------- */
   render();
+  initBackendSync();
 })();
 </script>
 

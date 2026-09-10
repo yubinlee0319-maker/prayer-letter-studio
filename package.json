@@ -1,0 +1,9 @@
+{
+  "name": "prayer-letter-studio",
+  "private": true,
+  "version": "1.0.0",
+  "description": "기도편지 공방 — 정적 웹 앱 + Turso 기반 동기화 API",
+  "dependencies": {
+    "@libsql/client": "0.18.0"
+  }
+}
