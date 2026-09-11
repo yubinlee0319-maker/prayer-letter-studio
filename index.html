@@ -1432,18 +1432,26 @@
     /* Title + verse + opening words all live on the cover page together. */
     coverParts = coverParts.concat(messageParts);
 
+    /* Prayer items split across two pages (first half, second half) so
+       neither page runs too long vertically — e.g. 3 items becomes
+       items 1-2 on page 2 and item 3 on page 3. */
+    var splitAt = Math.ceil(itemsParts.length / 2);
+    var itemsParts1 = itemsParts.slice(0, splitAt);
+    var itemsParts2 = itemsParts.slice(splitAt);
+
     if (letter.footerText){
       var footerHtml = '<div class="footer">' + esc(letter.footerText) + '</div>';
-      if (itemsParts.length) itemsParts.push(footerHtml);
+      if (itemsParts2.length) itemsParts2.push(footerHtml);
+      else if (itemsParts1.length) itemsParts1.push(footerHtml);
       else coverParts.push(footerHtml);
     }
 
-    /* Two pages: cover (photo/title + verse + opening words) and every
-       prayer item stacked together (+ footer). Each page hugs its own
-       content height (.card-track uses align-items:flex-start), so
-       combining these no longer creates the stretched empty space a
-       flex row's default alignment used to add. */
-    var groups = [coverParts, itemsParts].filter(function(g){ return g.length; });
+    /* Three pages: cover (photo/title + verse + opening words), the
+       first half of prayer items, the second half (+ footer). Each
+       page hugs its own content height (.card-track uses
+       align-items:flex-start), so this never creates the stretched
+       empty space a flex row's default alignment used to add. */
+    var groups = [coverParts, itemsParts1, itemsParts2].filter(function(g){ return g.length; });
     return groups.map(function(g){ return g.join(''); });
   }
 
