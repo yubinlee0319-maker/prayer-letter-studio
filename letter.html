@@ -37,7 +37,7 @@
   .paper .hero .hero-title{ font-family:'Noto Sans KR', sans-serif; font-size:26px; font-weight:800; color:#fff; line-height:1.3; text-shadow:0 2px 12px rgba(0,0,0,.4); }
 
   .paper .collage{ display:grid; grid-template-columns:1fr 1fr; gap:6px; border-radius:18px; overflow:hidden; }
-  .paper .collage img{ width:100%; height:100%; aspect-ratio:1/1; object-fit:cover; display:block; background:#e4ecf7; }
+  .paper .collage img{ width:100%; height:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:#e4ecf7; }
 
   .paper .verse-card{ background:#fdf1de; border-radius:20px; padding:24px 20px; text-align:center; }
   .paper .verse-card .icon{ font-size:26px; margin-bottom:8px; }
@@ -49,6 +49,8 @@
   .paper .intro p:last-child{ margin-bottom:0; }
 
   .paper .section-card{ border-radius:20px; padding:22px 18px; text-align:center; }
+  .paper .section-card.layout-left{ display:flow-root; text-align:left; }
+  .paper .section-card.layout-right{ display:flow-root; text-align:right; }
   .paper .section-card .badge{ display:inline-block; max-width:100%; padding:8px 16px; border-radius:12px; color:#fff; font-size:15px; font-weight:800; letter-spacing:-.01em; line-height:1.35; margin-bottom:14px; }
   .paper .section-card .items{ text-align:left; }
   .paper .section-card .item{ display:flex; gap:10px; align-items:flex-start; padding:10px 2px; border-bottom:1px dashed rgba(20,30,50,.14); }
@@ -56,6 +58,12 @@
   .paper .section-card .item:first-child{ padding-top:0; }
   .paper .section-card .num{ flex:none; width:22px; height:22px; border-radius:50%; color:#fff; font-size:11.5px; font-weight:800; display:flex; align-items:center; justify-content:center; margin-top:1px; }
   .paper .section-card .item span.txt{ font-size:13.5px; line-height:1.65; color:#28324a; text-align:left; }
+  .paper .section-card .side-photo{ width:46%; border-radius:16px; overflow:hidden; margin-bottom:12px; display:flex; flex-direction:column; gap:6px; }
+  .paper .section-card .side-photo.right{ float:right; margin-left:16px; }
+  .paper .section-card .side-photo.left{ float:left; margin-right:16px; }
+  .paper .section-card .side-photo img{ width:100%; aspect-ratio:4/3; object-fit:cover; display:block; }
+  .paper .collage-single{ border-radius:18px; overflow:hidden; }
+  .paper .collage-single img{ width:100%; aspect-ratio:16/10; object-fit:cover; display:block; }
 
   .paper .footer{ text-align:center; font-weight:700; font-size:12.5px; color:#7c8aa0; padding:4px 6px 2px; }
 
@@ -117,6 +125,7 @@
       var sPhotos = s.photos || [];
       if (!(s.heading||'').trim() && !lines.length && !sPhotos.length) return '';
       var c = CARD_PALETTE[sIdx % CARD_PALETTE.length];
+      var layout = sIdx === 0 ? 'left' : sIdx === 1 ? 'right' : 'center';
       sIdx++;
       var itemsHtml = lines.map(function(l, i){
         return (
@@ -126,16 +135,26 @@
           '</div>'
         );
       }).join('');
-      var sCollageHtml = sPhotos.length
-        ? '<div class="collage" style="margin-top:' + (lines.length ? '14px' : '2px') + '">' + sPhotos.map(function(p){ return '<img src="' + p.dataUrl + '" alt="사진">'; }).join('') + '</div>'
-        : '';
-      return (
-        '<div class="section-card" style="background:' + c.soft + '">' +
-          ((s.heading||'').trim() ? '<div class="badge" style="background:' + c.strong + '">' + esc(s.heading) + '</div>' : '') +
-          (lines.length ? '<div class="items">' + itemsHtml + '</div>' : '') +
-          sCollageHtml +
-        '</div>'
-      );
+
+      var badgeHtml = (s.heading||'').trim() ? '<div class="badge" style="background:' + c.strong + '">' + esc(s.heading) + '</div>' : '';
+      var itemsHtmlBlock = lines.length ? '<div class="items">' + itemsHtml + '</div>' : '';
+      var photoHtml = '';
+      if (sPhotos.length){
+        if (layout === 'center'){
+          photoHtml = sPhotos.length === 1
+            ? '<div class="collage-single" style="margin-top:' + (lines.length ? '14px' : '2px') + '"><img src="' + sPhotos[0].dataUrl + '" alt="사진"></div>'
+            : '<div class="collage" style="margin-top:' + (lines.length ? '14px' : '2px') + '">' + sPhotos.map(function(p){ return '<img src="' + p.dataUrl + '" alt="사진">'; }).join('') + '</div>';
+        } else {
+          var side = layout === 'left' ? 'right' : 'left';
+          photoHtml = '<div class="side-photo ' + side + '">' + sPhotos.slice(0, 2).map(function(p){ return '<img src="' + p.dataUrl + '" alt="사진">'; }).join('') + '</div>';
+        }
+      }
+
+      var innerHtml = layout === 'center'
+        ? badgeHtml + itemsHtmlBlock + photoHtml
+        : badgeHtml + photoHtml + itemsHtmlBlock;
+
+      return '<div class="section-card layout-' + layout + '" style="background:' + c.soft + '">' + innerHtml + '</div>';
     }).join('');
 
     return (
