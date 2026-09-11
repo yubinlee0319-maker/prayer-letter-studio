@@ -1429,18 +1429,21 @@
       );
     });
 
+    /* Title + verse + opening words all live on the cover page together. */
+    coverParts = coverParts.concat(messageParts);
+
     if (letter.footerText){
       var footerHtml = '<div class="footer">' + esc(letter.footerText) + '</div>';
       if (itemsParts.length) itemsParts.push(footerHtml);
-      else if (messageParts.length) messageParts.push(footerHtml);
       else coverParts.push(footerHtml);
     }
 
-    /* Three pages — cover / verse+opening words / prayer items — so no
-       single page ends up much taller than its neighbors. Any empty
-       page collapses forward (e.g. no verse and no opening words means
-       only two pages appear). */
-    var groups = [coverParts, messageParts, itemsParts].filter(function(g){ return g.length; });
+    /* Two pages: cover (photo/title + verse + opening words) and every
+       prayer item stacked together (+ footer). Each page hugs its own
+       content height (.card-track uses align-items:flex-start), so
+       combining these no longer creates the stretched empty space a
+       flex row's default alignment used to add. */
+    var groups = [coverParts, itemsParts].filter(function(g){ return g.length; });
     return groups.map(function(g){ return g.join(''); });
   }
 
